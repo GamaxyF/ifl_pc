@@ -18,6 +18,7 @@
 #endif
 #ifdef _WIN32
 #include <windows.h>
+#include <timeapi.h>
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -853,6 +854,17 @@ int main(int argc, char **argv) {
        non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits. */
     mallopt(M_ARENA_MAX,1);
     mallopt(M_MMAP_THRESHOLD,32*1024*1024);
+#else
+    /* 1 ms scheduler ticks: std::this_thread::sleep_until (the VideoOut vblank thread, the
+     * present pacing) otherwise rounds to the 15.6 ms default tick, so 60 Hz vblanks came late.
+     * TLG_TIMER_PERIOD=0 keeps the default (A/B). */
+    {
+        const char *period = getenv("TLG_TIMER_PERIOD");
+        if (!period || strcmp(period, "0")) {
+            timeBeginPeriod(1);
+            printf("Timer: 1 ms scheduler period\n");
+        }
+    }
 #endif
     if (argc == 2 && !strcmp(argv[1], "--vulkan-only")) return vulkan_smoke();
     char missing[128];

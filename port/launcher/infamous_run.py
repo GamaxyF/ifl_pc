@@ -530,7 +530,10 @@ def launch(settings, seconds=0, extra_env=None):
     USER_DIR.mkdir(parents=True, exist_ok=True)
     update_ini(USER_DIR / 'tlg.ini', {
         'display_mode': str(settings['display_mode']).lower(),  # the game's keys: windowed|borderless|fullscreen
-        'vsync': int(bool(settings['vsync'])),
+        # ISS_VSYNC=0/1 overrides the setting (off = Mailbox where the driver has it: no tearing,
+        # and a frame over 16.7 ms no longer drops the rate to 30 FPS as Fifo does).
+        'vsync': int(os.environ['ISS_VSYNC'] != '0') if os.environ.get('ISS_VSYNC') in ('0', '1')
+                 else int(bool(settings['vsync'])),
         'show_fps': int(bool(settings['show_fps'])),
     })
     log = new_log()

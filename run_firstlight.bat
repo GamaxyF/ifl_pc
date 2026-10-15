@@ -4,6 +4,7 @@ rem Game folder: ISS_GAME_DIR, or the one remembered in port\user\firstlight_gam
 rem Python: PYTHON, or the first "py -3" / "python" that has iced-x86 (pip install iced-x86).
 rem Texture cache: thresholds from the card's own memory (ISS_GC_BUDGET_MB=card) instead of the launcher's
 rem fixed 3500 MB, made for 6 GB cards: on 8 GB the city kept evicting textures, and buildings flickered.
+rem VSync: ISS_VSYNC=0 presents with Mailbox (no tearing, no drop to 30 FPS past 16.7 ms).
 rem Game language: ISS_LANGUAGE (PS4 system language id; 2 = French, 1 = English).
 setlocal
 set "PORT=%~dp0port"
@@ -11,6 +12,7 @@ if not defined MSYS2_ROOT set "MSYS2_ROOT=C:\msys64"
 set "SAVED=%PORT%\user\firstlight_game_dir.txt"
 if not defined ISS_GC_BUDGET_MB set "ISS_GC_BUDGET_MB=card"
 if not defined ISS_LANGUAGE set "ISS_LANGUAGE=2"
+if not defined ISS_VSYNC set "ISS_VSYNC=0"
 
 if not exist "%PORT%\out\tlg-probe.exe" (
     echo Port not built: run "bash port/build.sh" from an MSYS2 CLANG64 shell first.

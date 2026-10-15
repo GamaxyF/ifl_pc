@@ -243,6 +243,32 @@ bool PipelinedOpcode(PM4ItOpcode opcode) {
         return false;
     }
 }
+
+/// tlg: compute queue packets that must wait for the draw recording thread to run dry (see
+/// ProcessCompute). Dispatches are handed over by Rasterizer::DispatchDirect itself; fences,
+/// memory writes/waits and anything unknown keep the old full drain.
+bool ComputeOpcodeNeedsDrain(PM4ItOpcode opcode) {
+    static const bool drain_all = [] {
+        const char* env = std::getenv("TLG_COMPUTE_DRAIN_ALL");
+        return env && env[0] == '1';
+    }();
+    if (drain_all) {
+        return true;
+    }
+    switch (opcode) {
+    case PM4ItOpcode::Nop:
+    case PM4ItOpcode::SetShReg:
+    case PM4ItOpcode::SetQueueReg:
+    case PM4ItOpcode::AcquireMem:
+    case PM4ItOpcode::EventWrite:
+    case PM4ItOpcode::Rewind:
+    case PM4ItOpcode::IndirectBuffer:
+    case PM4ItOpcode::DispatchDirect:
+        return false;
+    default:
+        return true;
+    }
+}
 } // namespace
 
 namespace {
@@ -1413,9 +1439,6 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
     size_t acb_size = acb.size_bytes();
     while (!acb.empty()) {
         ProcessCommands();
-        if (rasterizer) {
-            rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCompute); // tlg: compute work uses the caches
-        }
 
         auto* header = reinterpret_cast<const PM4Header*>(acb.data());
         u32 next_dw_off = header->type3.NumWords() + 1;
@@ -1457,6 +1480,15 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
         }
 
         const PM4ItOpcode opcode = header->type3.opcode;
+        // tlg: compute work uses the caches, so stage B must have run dry first; but only for
+        // packets that touch them. Draining before every packet made each one after a dispatch
+        // (which DispatchDirect hands to stage B) wait for that dispatch to be recorded:
+        // inFAMOUS First Light drained 12-20k times/s, stage A waiting 25-30% of the time.
+        // Register writes only fill this queue's cs_state (copied into the dispatch packet) or
+        // registers stage B keeps its own copy of. TLG_COMPUTE_DRAIN_ALL=1: drain before all.
+        if (rasterizer && ComputeOpcodeNeedsDrain(opcode)) {
+            rasterizer->DrainDrawPipe(Vulkan::DrawPipe::ReasonCompute);
+        }
 
         const auto* it_body = reinterpret_cast<const u32*>(header) + 1;
         if (Vulkan::FrameRecord::Active()) [[unlikely]] {

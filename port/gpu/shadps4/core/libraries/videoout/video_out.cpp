@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdio>
 #include "common/assert.h"
 #include "common/elf_info.h"
 #include "common/logging/log.h"
@@ -141,6 +142,10 @@ s32 PS4_SYSV_ABI sceVideoOutRegisterBuffers(s32 handle, s32 startIndex, void* co
 
 s32 PS4_SYSV_ABI sceVideoOutSetFlipRate(s32 handle, s32 rate) {
     LOG_TRACE(Lib_VideoOut, "called");
+    // tlg: logged when it changes: rate 1 caps the game itself at 30 FPS (vblank 60 Hz / 2).
+    if (driver->GetPort(handle)->flip_rate != rate) {
+        std::printf("VideoOut: flip rate %d (every %d vblank)\n", rate, rate + 1);
+    }
     driver->GetPort(handle)->flip_rate = rate;
     return ORBIS_OK;
 }
