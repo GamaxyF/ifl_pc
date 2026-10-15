@@ -192,6 +192,24 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
         fprintf(stderr,"  #%d %s\n",depth,where);
         rbp=frame[0];
     }
+    /* Host code that keeps no frame pointer (ImGui, drivers): unwind with the SEH tables. */
+    CONTEXT u=*c;
+    for (int depth=0; depth<32 && u.Rip; ++depth) {
+        DWORD64 module_base=0;
+        PRUNTIME_FUNCTION function=RtlLookupFunctionEntry(u.Rip,&module_base,NULL);
+        if (function) {
+            void *handler_data=NULL; DWORD64 establisher=0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER,module_base,u.Rip,function,&u,&handler_data,&establisher,NULL);
+        } else {
+            /* Leaf function or guest code: the return address is on top of the stack. */
+            DWORD64 ret=0; SIZE_T got=0;
+            if (depth || !ReadProcessMemory(GetCurrentProcess(),(void *)u.Rsp,&ret,8,&got) || got!=8) break;
+            u.Rip=ret; u.Rsp+=8;
+        }
+        if (!u.Rip) break;
+        describe_address(where,sizeof(where),(uintptr_t)u.Rip);
+        fprintf(stderr,"  unwind #%d %s\n",depth,where);
+    }
     if (isa_table) isa_rewrite_report(isa_table,stderr);
     fflush(NULL);
     TerminateProcess(GetCurrentProcess(),3);
