@@ -30,9 +30,19 @@ LOG_DIR = OUT_DIR / 'logs'
 PROBE = OUT_DIR / ('tlg-probe.exe' if os.name == 'nt' else 'tlg-probe')
 KEEP_LOGS = 30
 
+# Which game this launcher runs: ISS_GAME=firstlight for inFAMOUS First Light (CUSA00575, same
+# engine), else Second Son. First Light keeps its own settings file and its own defaults.
+FIRST_LIGHT = os.environ.get('ISS_GAME', '').lower() in ('firstlight', 'first_light', 'cusa00575')
+GAME_NAME = 'inFAMOUS First Light' if FIRST_LIGHT else 'inFAMOUS Second Son'
+GAME_SUBTITLE = 'PC — CUSA00575 v1.04' if FIRST_LIGHT else 'PC — CUSA00223 v1.07'
+if FIRST_LIGHT:
+    # Measured on First Light (an 8 GB card, in the city), see run_firstlight.bat: buildings
+    # blinked while moving with the Second Son defaults. Kept in this game's settings file.
+    backports_table.apply_profile({'bp07': '1', 'stale_readback': '0', 'occlusion_mode': '2'})
+
 # Game language: PS4 system language ids (sceSystemServiceParamGetInt LANG). The list the game
 # really ships voice/text for is still to be checked against the dump.
-GAME_LANGUAGES = {'en': 1, 'pt_BR': 17, 'es_LA': 20, 'fr_CA': 22}
+GAME_LANGUAGES = {'en': 1, 'fr': 2, 'pt_BR': 17, 'es_LA': 20, 'fr_CA': 22}
 
 # TLG core defaults (the reasons are in each comment; still to be validated on this game).
 DEFAULT_ENV = {
@@ -62,11 +72,21 @@ DEFAULT_SETTINGS = {
     'deferred_readback': True,  # ISS_DEFERRED_READBACK: the game thread waits for its own GPU reads
     'gpu_readbacks': '2',    # 2 precise: GPU particles (smoke to drain) need it; 0 fast skips them
 }
+if FIRST_LIGHT:
+    # The folder run_firstlight.bat remembered, French (France), VSync off (Mailbox: no tearing,
+    # no drop to 30 FPS past 16.7 ms) and the texture cache sized from the card (0 = automatic:
+    # 3500 MB kept evicting textures on an 8 GB card, which flashed black while moving).
+    try:
+        _saved_dir = (USER_DIR / 'firstlight_game_dir.txt').read_text(encoding='utf-8', errors='replace').strip()
+    except OSError:
+        _saved_dir = ''
+    DEFAULT_SETTINGS.update({'game_dir': _saved_dir, 'game_language': 'fr', 'ui_language': 'auto',
+                             'vsync': False, 'vram_budget_mb': 0})
 
 
 def config_path():
     base = Path(os.environ.get('APPDATA') or os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
-    return base / 'infamous-launcher' / 'settings.json'
+    return base / ('infamous-firstlight-launcher' if FIRST_LIGHT else 'infamous-launcher') / 'settings.json'
 
 
 def load_settings():
@@ -213,7 +233,7 @@ def update_ini(path, values):
 
 # The serial the GPU backend names this game's shader cache after (another region's copy: its
 # param.sfo TITLE_ID, read from the game folder).
-SHADER_CACHE_SERIALS = ('CUSA00223', 'CUSA00575')
+SHADER_CACHE_SERIALS = ('CUSA00575',) if FIRST_LIGHT else ('CUSA00223',)
 
 
 def shader_cache_serials(settings):
@@ -470,7 +490,9 @@ def build_env(settings, extra=None):
     env = dict(os.environ)
     for key, value in DEFAULT_ENV.items():
         env.setdefault(key, value)  # explicit ISS_* in the environment always win
-    env['ISS_GC_BUDGET_MB'] = os.environ.get('ISS_GC_BUDGET_MB', str(int(settings['vram_budget_mb'])))
+    # 0 = automatic: thresholds from the card's own memory (TLG_GC_BUDGET_MB=card).
+    budget = int(settings['vram_budget_mb'])
+    env['ISS_GC_BUDGET_MB'] = os.environ.get('ISS_GC_BUDGET_MB', str(budget) if budget > 0 else 'card')
     env['ISS_READBACKS'] = os.environ.get('ISS_READBACKS', str(settings.get('gpu_readbacks', '2')))
     env['ISS_EAGER_READBACK'] = os.environ.get('ISS_EAGER_READBACK', '1' if settings.get('eager_readback', True) else '0')
     env['ISS_WRITE_MERGE'] = os.environ.get('ISS_WRITE_MERGE', '1' if settings.get('write_merge', True) else '0')
@@ -481,7 +503,7 @@ def build_env(settings, extra=None):
         env['ISS_UI_LANG'] = settings['ui_language']
     env['ISS_CONFIG'] = str(USER_DIR / 'tlg.ini')
     # Window name, app id (matches infamous-pc.desktop for Alt+Tab and the dock) and icon.
-    env.setdefault('ISS_APP_NAME', 'inFAMOUS Second Son')
+    env.setdefault('ISS_APP_NAME', GAME_NAME)
     env.setdefault('ISS_APP_ID', 'infamous-pc')
     icon = window_icon(settings)
     if icon:

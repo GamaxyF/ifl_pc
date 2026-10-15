@@ -13,6 +13,8 @@ rem what the game hides with them blinks while moving). 3 = the old answer.
 rem Game language: ISS_LANGUAGE (PS4 system language id; 2 = French, 1 = English).
 setlocal
 set "PORT=%~dp0port"
+rem Same settings file as launcher_firstlight.bat (folder, language, texture budget...).
+set "ISS_GAME=firstlight"
 if not defined MSYS2_ROOT set "MSYS2_ROOT=C:\msys64"
 set "SAVED=%PORT%\user\firstlight_game_dir.txt"
 if not defined ISS_GC_BUDGET_MB set "ISS_GC_BUDGET_MB=card"

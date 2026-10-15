@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""inFAMOUS Second Son launcher (Tkinter, Linux and Windows), in pt_BR and en_US.
+"""inFAMOUS Second Son / First Light launcher (Tkinter, Linux and Windows), in en_US, pt_BR and fr_FR.
+ISS_GAME=firstlight runs First Light, with its own settings file and defaults (infamous_run.py).
 
 Game folder, game and interface language, display, FPS overlay and VRAM budget; Play starts the
 game through infamous_run.py (the same code path as run_infamous.sh) and shows its log.
@@ -22,7 +23,7 @@ import backports_table  # noqa: E402
 import infamous_run as tlg_run  # noqa: E402  (same API as the TLG core)
 
 TEXT = {
-    'title': ('inFAMOUS Second Son — PC', 'inFAMOUS Second Son — PC'),
+    'title': (tlg_run.GAME_NAME + ' — PC', tlg_run.GAME_NAME + ' — PC'),
     'game': ('Game', 'Jogo'),
     'game_dir': ('Game folder', 'Pasta do jogo'),
     'browse': ('Browse…', 'Procurar…'),
@@ -124,12 +125,94 @@ TEXT = {
     'exp_close': ('Close', 'Fechar'),
 }
 TEXT.update(tlg_run.TEXT)  # game folder problems (old libc.prx, other eboot), shared with the command line
+# French interface (fr_FR). Keys missing here fall back to English (the experimental window's rows).
+TEXT_FR = {
+    'title': tlg_run.GAME_NAME + ' — PC',
+    'game': 'Jeu', 'game_dir': 'Dossier du jeu', 'browse': 'Parcourir…',
+    'language': 'Langue', 'game_language': 'Langue du jeu (voix et textes)',
+    'ui_language': "Langue de l'interface", 'auto': 'Automatique (système)',
+    'video': 'Vidéo', 'display_mode': "Mode d'affichage", 'Windowed': 'Fenêtré',
+    'Borderless': 'Fenêtre sans bordure', 'Fullscreen': 'Plein écran',
+    'vsync': 'VSync (désactivée : Mailbox, sans déchirement ni chute à 30 FPS)',
+    'show_fps': 'Afficher les FPS au démarrage (F10 pour basculer)',
+    'eager_readback': 'Lire les résultats du GPU en avance (plus rapide)',
+    'write_merge': 'Écrire dans la mémoire du GPU sans attendre (plus rapide)',
+    'vram': 'Budget du cache de textures (Mo de VRAM)',
+    'vram_hint': "0 = automatique (recommandé) : calculé d'après la mémoire de ta carte, avec 512 Mo de marge. "
+                 "Sinon une valeur fixe : 6 Go : 3500 · 8 Go : 5000 · 12 Go : 8500. C'est la mémoire de la carte "
+                 "graphique (VRAM), pas la RAM. Un budget trop bas fait clignoter des textures en noir.",
+    'gpu_readbacks': 'Précision du GPU', 'readbacks_0': 'Rapide (sans particules GPU)',
+    'readbacks_1': 'Intermédiaire', 'readbacks_2': 'Précis (recommandé)',
+    'controller': 'Manette', 'deadzone': 'Zone morte des sticks',
+    'deadzone_hint': 'Augmente-la si le personnage ou la caméra bouge tout seul (drift).',
+    'sensor_hint': "Capteur de mouvement : le gyroscope de la DualShock/DualSense marche directement. Sans capteur, "
+                   "appuie sur L3+R3 (ou Share sur Xbox Series) pour le mode capteur : croix/A secoue, R2 vaporise, "
+                   "le stick gauche vise ; L3+R3 à nouveau pour le couper. Pavé tactile : View/Select (maintenir + stick "
+                   "droit = glisser ; + R1 = les deux bords). Clavier : T/G/Y.",
+    'play': 'Jouer', 'saves': 'Dossier des sauvegardes', 'logs': 'Dossier des journaux',
+    'clear_cache': 'Vider le cache de shaders',
+    'clear_cache_ask': 'Cela supprime les shaders compilés ({size}) ; le prochain lancement sera plus long et '
+                       'pourra saccader au début. Continuer ?',
+    'clear_cache_empty': 'Le cache de shaders est déjà vide.',
+    'clear_cache_done': 'Cache de shaders vidé : {size} libérés.',
+    'clear_cache_failed': '{size} libérés, mais {count} fichier(s) n\'ont pas pu être supprimés (en cours '
+                          "d'utilisation ? Ferme le jeu et réessaie).",
+    'quit': 'Quitter', 'ready': 'Prêt à jouer.', 'missing': 'Manquant',
+    'not_built': 'Port non compilé (lance build.sh)', 'preparing': 'Préparation du jeu…',
+    'running': 'En jeu — journal :', 'ended': 'Jeu fermé (code {code}).',
+    'crashed': "Le jeu s'est fermé avec une erreur (code {code}). Le journal contient les détails.",
+    'already': 'Le jeu est déjà lancé.', 'error': 'Erreur',
+    'port_by': 'Port PC par HayatoG', 'channel': 'Chaîne YouTube : @hayatog-dev', 'discord': 'Communauté Discord',
+    'experimental': 'Correctifs expérimentaux…',
+    'exp_title': 'Correctifs expérimentaux et options du menu du jeu',
+    'exp_intro': "Tout ici est enregistré et s'applique au prochain lancement du jeu. Les éléments marqués "
+                 "« en jeu » peuvent aussi être changés pendant la partie, dans le menu Insert. Sans rien toucher, "
+                 "le profil recommandé (les valeurs par défaut) s'applique.",
+    'exp_tab_menu': 'Menu du jeu (Insert)', 'exp_tab_bp': 'Correctifs expérimentaux (BPnn)',
+    'exp_tab_ab': 'Interrupteurs de diagnostic / A-B',
+    'exp_menu_note': "Mode d'affichage, VSync et l'affichage des FPS sont dans le cadre Vidéo de la fenêtre "
+                     "principale. Voici les autres options du menu Insert.",
+    'exp_bp_note': "Correctifs repris d'autres ports PS4 et de shadPS4. Ceux marqués « expérimental » sont "
+                   "désactivés par défaut : ne les active que pour tester.",
+    'exp_ab_note': "Interrupteurs pour trouver quel changement cause un problème. « Automatique » laisse le code "
+                   "GPU décider selon ton pilote.",
+    'exp_tab_Image': 'Image', 'exp_tab_Performance': 'Performances', 'exp_tab_Controls': 'Manette',
+    'exp_tab_Overlay': 'Overlay', 'exp_live': 'en jeu', 'exp_restart': 'relance le jeu',
+    'exp_experimental': 'expérimental', 'exp_broken': 'fait encore planter le jeu',
+    'exp_shader': 'la première partie après le changement recompile les shaders (peut clignoter ou virer au '
+                  'vert un moment)',
+    'exp_source': 'source : {source}', 'exp_default': 'par défaut',
+    'occlusion': 'Requêtes d\'occlusion',
+    'occlusion_hint': ("Réponse donnée au jeu quand il demande si un objet ou une lumière est visible. "
+                       "2 (recommandé pour First Light) : tout est visible, les bâtiments ne clignotent plus en se "
+                       "déplaçant. 3 : zéro pixel (réglage de Second Son). S'applique au prochain lancement."
+                       if tlg_run.FIRST_LIGHT else
+                       "Quelle part d'une lumière le jeu compte comme visible. 3 (recommandé) évite que le halo des "
+                       "phares passe à travers les personnages ; 0 est l'ancien comportement. S'applique au prochain "
+                       "lancement."),
+    'exp_auto': 'Automatique', 'exp_on': 'Activé', 'exp_off': 'Désactivé',
+    'exp_defaults': 'Revenir au recommandé', 'exp_recommended': 'recommandé',
+    'exp_profile_rec': 'Profil : recommandé', 'exp_profile_custom': 'Profil : personnalisé ({n} changements)',
+    'notice': "Cette version apporte de nouveaux correctifs, déjà actifs dans le mode recommandé. Si tu remarques "
+              "quelque chose d'anormal (lumières, textures, blocages), ouvre les correctifs expérimentaux et utilise "
+              "« Comme la version précédente ».",
+    'notice_open': 'Ouvrir les correctifs', 'notice_ok': 'OK',
+    'exp_previous': 'Comme la version précédente (désactive tous les BPnn)',
+    'exp_previous_hint': "« Comme la version précédente » désactive tous les correctifs actifs par défaut ; les "
+                         "cases le montrent et tu peux les réactiver un par un.",
+    'exp_close': 'Fermer',
+    'old_module': "{detail} ne vient pas de la bonne mise à jour et le jeu ne peut pas démarrer avec. Copie tous "
+                  "les fichiers de la mise à jour par-dessus le dossier du jeu de base, en remplaçant les fichiers.",
+    'other_eboot': "Ce eboot.bin n'est pas celui testé ({detail}) : First Light est testé en CUSA00575 (US) 1.04, "
+                   "Second Son en CUSA00223 (US) 1.07. Copie la mise à jour par-dessus le jeu de base.",
+    'unreadable': "Impossible de lire {detail} (endommagé, incomplet ou encore chiffré) : refais le dump depuis la PS4.",
+}
 CHANNEL_URL = 'https://www.youtube.com/@hayatog-dev'
 DISCORD_URL = 'https://discord.gg/UMkdMYZh9g'
-GAME_LANGUAGE_NAMES = {'en': 'English', 'pt_BR': 'Português (Brasil)', 'es_LA': 'Español (Latinoamérica)',
-                       'fr_CA': 'Français (Canada)'}
-UI_LANGUAGES = ['auto', 'pt_BR', 'en_US']
-UI_LANGUAGE_NAMES = {'pt_BR': 'Português (Brasil)', 'en_US': 'English (US)'}
+GAME_LANGUAGE_NAMES = {'en': 'English', 'fr': 'Français (France)', 'pt_BR': 'Português (Brasil)',
+                       'es_LA': 'Español (Latinoamérica)', 'fr_CA': 'Français (Canada)'}
+UI_LANGUAGES = ['auto', 'fr_FR', 'pt_BR', 'en_US']
+UI_LANGUAGE_NAMES = {'fr_FR': 'Français', 'pt_BR': 'Português (Brasil)', 'en_US': 'English (US)'}
 DISPLAY_MODES = ['Windowed', 'Borderless', 'Fullscreen']
 
 
@@ -141,15 +224,24 @@ def art_path(settings, name):
     return None
 
 
-def system_is_portuguese():
+def system_language():
+    """'pt', 'fr' or 'en' from the environment or the system locale (Windows: 'French_France')."""
+    value = ''
     for name in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
-        value = os.environ.get(name)
+        value = os.environ.get(name) or ''
         if value:
-            return value.lower().startswith('pt')
-    try:
-        return (locale.getlocale()[0] or '').lower().startswith('pt')
-    except ValueError:
-        return False
+            break
+    if not value:
+        try:
+            value = locale.getlocale()[0] or ''
+        except ValueError:
+            value = ''
+    value = value.lower()
+    return 'pt' if value.startswith('pt') or value.startswith('portuguese') else         'fr' if value.startswith('fr') else 'en'
+
+
+def system_is_portuguese():
+    return system_language() == 'pt'
 
 
 class Launcher:
@@ -164,11 +256,16 @@ class Launcher:
             self.root.after(400, self.show_notice)
 
     # -- language ---------------------------------------------------------------------------
-    def pt(self):
+    def ui(self):
         choice = self.settings.get('ui_language', 'auto')
-        return system_is_portuguese() if choice == 'auto' else choice == 'pt_BR'
+        return system_language() if choice == 'auto' else {'pt_BR': 'pt', 'fr_FR': 'fr'}.get(choice, 'en')
+
+    def pt(self):
+        return self.ui() == 'pt'
 
     def t(self, key, **fmt):
+        if self.ui() == 'fr' and key in TEXT_FR:  # French: the main window; the rest stays English
+            return TEXT_FR[key].format(**fmt)
         en, pt = TEXT[key]
         return (pt if self.pt() else en).format(**fmt)
 
@@ -194,8 +291,8 @@ class Launcher:
             ttk.Label(header, image=self.banner).pack(side='left', padx=(0, 14))
         titles = ttk.Frame(header)
         titles.pack(side='left', fill='y')
-        ttk.Label(titles, text='inFAMOUS Second Son', font=('TkDefaultFont', 22, 'bold')).pack(anchor='w')
-        ttk.Label(titles, text='PC — CUSA00223 v1.07', foreground='#777').pack(anchor='w')
+        ttk.Label(titles, text=tlg_run.GAME_NAME, font=('TkDefaultFont', 22, 'bold')).pack(anchor='w')
+        ttk.Label(titles, text=tlg_run.GAME_SUBTITLE, foreground='#777').pack(anchor='w')
         credits = ttk.Frame(header)
         credits.pack(side='right', anchor='ne')
         ttk.Label(credits, text=self.t('port_by'), foreground='#777').pack(anchor='e')
@@ -263,7 +360,7 @@ class Launcher:
         ttk.Label(video, text=self.t('vram'), wraplength=220).grid(row=3, column=0, sticky='w', pady=(6, 0))
         vram = tk.IntVar(value=int(self.settings['vram_budget_mb']))
         self.vars['vram_budget_mb'] = vram
-        spin = ttk.Spinbox(video, from_=2000, to=24000, increment=200, textvariable=vram, width=8,
+        spin = ttk.Spinbox(video, from_=0, to=24000, increment=200, textvariable=vram, width=8,
                            command=self.changed)
         spin.grid(row=3, column=1, sticky='w', padx=6, pady=(6, 0))
         spin.bind('<FocusOut>', lambda _: self.changed())
@@ -467,7 +564,7 @@ class Launcher:
         for item in backports_table.ITEMS:
             if item.store == 'launcher':  # already handled by build_env (settings.json)
                 value = backports_table.effective(item, self.exp_states)
-                self.settings[item.key] = value != '0'
+                self.settings[item.key] = value != '0' if item.vtype == 'bool' else value
         tlg_run.save_settings(self.settings)
 
     def exp_set(self, item, value):

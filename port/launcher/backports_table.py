@@ -229,11 +229,29 @@ DIAGNOSTICS = [
 
 ITEMS = MENU + BACKPORTS + DIAGNOSTICS
 PREFIX = 'ISS_'
+# Item ids whose value a game profile sets (apply_profile): always given to the game.
+FORCED = set()
+
+
+def apply_profile(defaults):
+    """Per-game defaults ({key: value}) that differ from the core's own. Such an item is kept in
+    the game's settings.json (the game itself rewrites every tlg.ini key when it saves its menu,
+    so an ini value says nothing about the player's choice) and always reaches the game as
+    ISS_<name>, its default included: the core would otherwise use its own default."""
+    for table in (MENU, BACKPORTS, DIAGNOSTICS, ITEMS):
+        for i, item in enumerate(table):
+            if item.key in defaults:
+                table[i] = item._replace(default=defaults[item.key], store='launcher', pass_env=True)
+                FORCED.add(item.id)
 
 
 def _from_launcher(item, settings):
     value = settings.get(item.key)
-    return item.default if value is None else '1' if value else '0'
+    if value is None:
+        return item.default
+    if item.vtype != 'bool':
+        return str(value)
+    return '1' if value else '0'
 
 
 def read_states(ini, settings=None):
@@ -283,6 +301,8 @@ def environment(states, environ=None):
     env = {}
     for item in ITEMS:
         value = states.get(item.id)
+        if value is None and item.id in FORCED:
+            value = item.default
         if value is None or not item.pass_env:
             continue
         suffix = item.env[len('TLG_'):]
