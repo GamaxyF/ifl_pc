@@ -2,14 +2,14 @@
 rem Runs inFAMOUS First Light (CUSA00575, base 1.00 + update 1.04) from a source build on Windows.
 rem Game folder: ISS_GAME_DIR, or the one remembered in port\user\firstlight_game_dir.txt, or asked once.
 rem Python: PYTHON, or the first "py -3" / "python" that has iced-x86 (pip install iced-x86).
-rem Texture cache: sized from the card's own memory (ISS_GC_BUDGET_MB=0) instead of the launcher's
+rem Texture cache: thresholds from the card's own memory (ISS_GC_BUDGET_MB=card) instead of the launcher's
 rem fixed 3500 MB, made for 6 GB cards: on 8 GB the city kept evicting textures, and buildings flickered.
 rem Game language: ISS_LANGUAGE (PS4 system language id; 2 = French, 1 = English).
 setlocal
 set "PORT=%~dp0port"
 if not defined MSYS2_ROOT set "MSYS2_ROOT=C:\msys64"
 set "SAVED=%PORT%\user\firstlight_game_dir.txt"
-if not defined ISS_GC_BUDGET_MB set "ISS_GC_BUDGET_MB=0"
+if not defined ISS_GC_BUDGET_MB set "ISS_GC_BUDGET_MB=card"
 if not defined ISS_LANGUAGE set "ISS_LANGUAGE=2"
 
 if not exist "%PORT%\out\tlg-probe.exe" (

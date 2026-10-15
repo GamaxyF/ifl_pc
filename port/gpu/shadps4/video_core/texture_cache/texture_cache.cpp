@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <filesystem>
+#include <string_view>
 #include <xxhash.h>
 #include "video_core/amdgpu/liverpool.h"
 
@@ -1579,7 +1580,28 @@ void TextureCache::GarbageCollectImages() {
             const char* env = std::getenv("TLG_GC_BUDGET_MB");
             return env ? std::strtoull(env, nullptr, 10) << 20 : 0;
         }();
-        if (instance.IsIntegrated() || forced_budget) {
+        // tlg: TLG_GC_BUDGET_MB=card: thresholds from this card's own memory, 512 MB kept free.
+        // inFAMOUS First Light on an 8 GB card (7.3 GB reported) used 4.9 GB: the default marks
+        // (pressure 2.5 GB) and even the trigger level evicted textures unused for 16 submissions,
+        // up to 1455 every 5 s in the city, and they flashed black while coming back.
+        static const bool card_budget = [] {
+            const char* env = std::getenv("TLG_GC_BUDGET_MB");
+            return env && std::string_view{env} == "card";
+        }();
+        if (card_budget && !instance.IsIntegrated()) {
+            const s64 card = static_cast<s64>(instance.GetTotalMemoryBudget());
+            const u64 budget = static_cast<u64>(std::max<s64>(card - 512_MB, card / 2));
+            trigger_gc_memory = budget / 100 * 88;
+            pressure_gc_memory = budget / 100 * 92;
+            critical_gc_memory = budget / 100 * 95;
+            ApplyResidencyHeadroom();
+            static bool logged = false;
+            if (!std::exchange(logged, true)) {
+                std::printf("Texture cache: card budget %llu MiB (trigger %llu, pressure %llu, critical %llu)\n",
+                            (unsigned long long)(budget >> 20), (unsigned long long)(trigger_gc_memory >> 20),
+                            (unsigned long long)(pressure_gc_memory >> 20), (unsigned long long)(critical_gc_memory >> 20));
+            }
+        } else if (instance.IsIntegrated() || forced_budget) {
             const u64 budget = forced_budget ? forced_budget : instance.GetDeviceMemoryBudgetNow();
             if (budget != 0) {
                 trigger_gc_memory = budget / 10 * 7;
