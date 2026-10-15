@@ -275,6 +275,8 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (gr2_json) return gr2_json;
     uintptr_t infamous = runtime_infamous_resolve(name);
     if (infamous) return infamous;
+    uintptr_t firstlight = runtime_firstlight_resolve(name);
+    if (firstlight) return firstlight;
     return tlggpu_resolve(name);
 }
 static const struct { const char *nid, *symbol; } import_names[]={

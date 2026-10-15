@@ -87,6 +87,9 @@ def save_settings(settings):
 # The supported eboot.bin (update 1.07, US): entry point and memory image size from its ELF
 # headers, the same whatever tool decrypted it (base 1.00 is 0x933850 / 85,115,231 bytes).
 EBOOT_107 = (0x61dfd0, 133_846_143)
+# inFAMOUS First Light (CUSA00575 US, update 1.04 over base 1.00), same engine: also accepted.
+EBOOT_FIRST_LIGHT_104 = (0x6ffd70, 136_535_375)
+SUPPORTED_EBOOTS = (EBOOT_107, EBOOT_FIRST_LIGHT_104)
 
 # Messages about the player's game folder (en, pt); the launcher shows them in its language,
 # the command line prints both. {detail} names the file.
@@ -172,7 +175,7 @@ def check_game(game_dir):
     else:
         try:
             entry, size = _cached(eboot, 'layout', eboot_layout)
-            if (entry, size) != EBOOT_107:
+            if (entry, size) not in SUPPORTED_EBOOTS:
                 problems.append(('other_eboot', f'entry={entry:#x}, image={size:,} bytes'))
         except (OSError, ValueError, KeyError, StopIteration) as error:
             problems.append(('unreadable', f'eboot.bin ({error})'))
@@ -210,7 +213,7 @@ def update_ini(path, values):
 
 # The serial the GPU backend names this game's shader cache after (another region's copy: its
 # param.sfo TITLE_ID, read from the game folder).
-SHADER_CACHE_SERIALS = ('CUSA00223',)
+SHADER_CACHE_SERIALS = ('CUSA00223', 'CUSA00575')
 
 
 def shader_cache_serials(settings):

@@ -26,6 +26,7 @@
  */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -263,6 +264,190 @@ static ABI int32_t value_serialize(const JValue *self, JString *out) {
     return 0;
 }
 
+/* ---- Parser and const accessors (inFAMOUS First Light 1.04) ----
+ * First Light imports Parser::parse plus Value::operator[] (by key and by index), getInteger and
+ * getString, the read side GR2 never needed. The getters return const references, as in the SDK
+ * header; a missing key, an out-of-range index or the wrong type yields a shared null/zero/"". */
+#define JSON_PARSE_ERROR ((int32_t)0x80920101) /* any negative value fails the call; exact SDK code unverified */
+typedef struct { const char *p, *end; } Reader;
+static void skip_space(Reader *r) {
+    while (r->p<r->end && (*r->p==' ' || *r->p=='\t' || *r->p=='\n' || *r->p=='\r')) ++r->p;
+}
+static int read_hex4(Reader *r, uint32_t *out) {
+    if (r->end-r->p<4) return 0;
+    uint32_t u=0;
+    for (int i=0;i<4;++i) {
+        char c=*r->p++;
+        u<<=4;
+        if (c>='0' && c<='9') u|=(uint32_t)(c-'0');
+        else if (c>='a' && c<='f') u|=(uint32_t)(c-'a'+10);
+        else if (c>='A' && c<='F') u|=(uint32_t)(c-'A'+10);
+        else return 0;
+    }
+    *out=u;
+    return 1;
+}
+static void put_utf8(Buffer *b, uint32_t c) {
+    char s[4];
+    size_t n;
+    if (c<0x80) { s[0]=(char)c; n=1; }
+    else if (c<0x800) { s[0]=(char)(0xc0|c>>6); s[1]=(char)(0x80|(c&0x3f)); n=2; }
+    else if (c<0x10000) { s[0]=(char)(0xe0|c>>12); s[1]=(char)(0x80|((c>>6)&0x3f)); s[2]=(char)(0x80|(c&0x3f)); n=3; }
+    else { s[0]=(char)(0xf0|c>>18); s[1]=(char)(0x80|((c>>12)&0x3f)); s[2]=(char)(0x80|((c>>6)&0x3f)); s[3]=(char)(0x80|(c&0x3f)); n=4; }
+    put(b,s,n);
+}
+/* r->p is on the opening quote; returns a heap string, NULL on bad input. */
+static char *read_string(Reader *r) {
+    Buffer b={0};
+    put(&b,"",0);
+    ++r->p;
+    while (r->p<r->end) {
+        char c=*r->p++;
+        if (c=='"') return b.data;
+        if ((unsigned char)c<0x20) break;
+        if (c!='\\') { put(&b,&c,1); continue; }
+        if (r->p>=r->end) break;
+        c=*r->p++;
+        uint32_t u, low;
+        switch (c) {
+        case '"': case '\\': case '/': put(&b,&c,1); break;
+        case 'b': put(&b,"\b",1); break;
+        case 'f': put(&b,"\f",1); break;
+        case 'n': put(&b,"\n",1); break;
+        case 'r': put(&b,"\r",1); break;
+        case 't': put(&b,"\t",1); break;
+        case 'u':
+            if (!read_hex4(r,&u)) goto fail;
+            if (u>=0xd800 && u<0xdc00) { /* surrogate pair */
+                if (r->end-r->p<6 || r->p[0]!='\\' || r->p[1]!='u') goto fail;
+                r->p+=2;
+                if (!read_hex4(r,&low) || low<0xdc00 || low>=0xe000) goto fail;
+                u=0x10000+((u-0xd800)<<10)+(low-0xdc00);
+            }
+            put_utf8(&b,u);
+            break;
+        default: goto fail;
+        }
+    }
+fail:
+    free(b.data);
+    return NULL;
+}
+static int read_number(Reader *r, JValue *out) {
+    char text[64];
+    size_t n=0;
+    int real=0;
+    while (r->p<r->end && n<sizeof text-1 && strchr("+-0123456789.eE",*r->p) && *r->p) {
+        if (*r->p=='.' || *r->p=='e' || *r->p=='E') real=1;
+        text[n++]=*r->p++;
+    }
+    text[n]=0;
+    if (!n) return 0;
+    char *stop;
+    errno=0;
+    if (!real) {
+        long long i=strtoll(text,&stop,10);
+        if (!*stop && !errno) { out->type=JT_INT; out->v.i=i; return 1; }
+        errno=0;
+        unsigned long long u=text[0]!='-' ? strtoull(text,&stop,10) : 0;
+        if (text[0]!='-' && !*stop && !errno) { out->type=JT_UINT; out->v.u=u; return 1; }
+    }
+    double d=strtod(text,&stop);
+    if (*stop) return 0;
+    out->type=JT_REAL; out->v.r=d;
+    return 1;
+}
+static int read_literal(Reader *r, const char *word) {
+    size_t n=strlen(word);
+    if ((size_t)(r->end-r->p)<n || memcmp(r->p,word,n)) return 0;
+    r->p+=n;
+    return 1;
+}
+/* Fills *out (zeroed by the caller); on failure *out may hold a partial tree for value_free. */
+static int read_value(Reader *r, JValue *out, int depth) {
+    if (depth>256) return 0;
+    skip_space(r);
+    if (r->p>=r->end) return 0;
+    char c=*r->p;
+    if (c=='{' || c=='[') {
+        int object=c=='{';
+        char close=object?'}':']';
+        out->type=object?JT_OBJECT:JT_ARRAY;
+        out->v.list=xcalloc(1,sizeof *out->v.list);
+        ++r->p;
+        skip_space(r);
+        if (r->p<r->end && *r->p==close) { ++r->p; return 1; }
+        for (;;) {
+            char *key=NULL;
+            if (object) {
+                skip_space(r);
+                if (r->p>=r->end || *r->p!='"' || !(key=read_string(r))) return 0;
+                skip_space(r);
+                if (r->p>=r->end || *r->p!=':') { free(key); return 0; }
+                ++r->p;
+            }
+            JNode *node=list_append(out->v.list,key);
+            free(key);
+            if (!read_value(r,&node->value,depth+1)) return 0;
+            skip_space(r);
+            if (r->p<r->end && *r->p==',') { ++r->p; continue; }
+            if (r->p<r->end && *r->p==close) { ++r->p; return 1; }
+            return 0;
+        }
+    }
+    if (c=='"') {
+        char *s=read_string(r);
+        if (!s) return 0;
+        out->type=JT_STRING; out->v.s=s;
+        return 1;
+    }
+    if (read_literal(r,"true")) { out->type=JT_BOOL; out->v.b=1; return 1; }
+    if (read_literal(r,"false")) { out->type=JT_BOOL; out->v.b=0; return 1; }
+    if (read_literal(r,"null")) { out->type=JT_NULL; return 1; }
+    return read_number(r,out);
+}
+/* static int Parser::parse(Value &out, const char *text, size_t size) */
+static ABI int32_t parser_parse(JValue *out, const char *text, uint64_t size) {
+    ONCE("Parser::parse");
+    if (!out || !text) return JSON_PARSE_ERROR;
+    Reader r={text,text+size};
+    JValue parsed;
+    memset(&parsed,0,sizeof parsed);
+    int ok=read_value(&r,&parsed,0);
+    skip_space(&r);
+    while (ok && r.p<r.end && !*r.p) ++r.p; /* trailing NULs of a fixed-size buffer */
+    if (!ok || r.p!=r.end) {
+        value_free(&parsed);
+        printf("Runtime: sce::Json Parser::parse failed at byte %lld of %llu\n",
+               (long long)(r.p-text),(unsigned long long)size);
+        return JSON_PARSE_ERROR;
+    }
+    value_free(out);
+    *out=parsed;
+    if (getenv("TLG_JSON_LOG")) printf("Runtime: sce::Json parse %.*s\n",(int)(size<512?size:512),text);
+    return 0;
+}
+static JValue null_value; /* never written: every type is JT_NULL */
+static const int64_t zero_integer;
+static const JString empty_string;
+static ABI const JValue *value_index_key(const JValue *self, const char *key) {
+    if (self->type==JT_OBJECT && self->v.list && key)
+        for (const JNode *n=self->v.list->head;n;n=n->next) if (!strcmp(n->key,key)) return &n->value;
+    return &null_value;
+}
+static ABI const JValue *value_index_position(const JValue *self, uint64_t index) {
+    if (self->type==JT_ARRAY && self->v.list)
+        for (const JNode *n=self->v.list->head;n;n=n->next) if (!index--) return &n->value;
+    return &null_value;
+}
+static ABI const int64_t *value_get_integer(const JValue *self) {
+    return self->type==JT_INT || self->type==JT_UINT ? &self->v.i : &zero_integer;
+}
+/* String is one char pointer, the same layout as a string Value's payload. */
+static ABI const JString *value_get_string(const JValue *self) {
+    return self->type==JT_STRING ? (const JString *)&self->v.s : &empty_string;
+}
+
 static const RuntimeExport exports[]={
     {"_ZN3sce4Json11Initializer10initializeEPKNS0_13InitParameterE",init_initialize},
     {"_ZN3sce4Json11Initializer9terminateEv",init_terminate},
@@ -296,6 +481,11 @@ static const RuntimeExport exports[]={
     {"_ZN3sce4Json6StringD1Ev",string_dtor},
     {"_ZNK3sce4Json5Array4sizeEv",array_size},
     {"_ZNK3sce4Json6String5c_strEv",string_c_str},
+    {"_ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm",parser_parse},
+    {"_ZNK3sce4Json5Value10getIntegerEv",value_get_integer},
+    {"_ZNK3sce4Json5Value9getStringEv",value_get_string},
+    {"_ZNK3sce4Json5ValueixEPKc",value_index_key},
+    {"_ZNK3sce4Json5ValueixEm",value_index_position},
 };
 uintptr_t runtime_gr2_json_resolve(const char *name) {
     return RUNTIME_LOOKUP(exports,name);
