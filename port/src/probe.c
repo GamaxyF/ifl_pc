@@ -860,10 +860,8 @@ int main(int argc, char **argv) {
      * TLG_TIMER_PERIOD=0 keeps the default (A/B). */
     {
         const char *period = getenv("TLG_TIMER_PERIOD");
-        if (!period || strcmp(period, "0")) {
-            timeBeginPeriod(1);
-            printf("Timer: 1 ms scheduler period\n");
-        }
+        /* Silent: --cpu-features and --gamepad print exactly one line. */
+        if (!period || strcmp(period, "0")) timeBeginPeriod(1);
     }
 #endif
     if (argc == 2 && !strcmp(argv[1], "--vulkan-only")) return vulkan_smoke();

@@ -10,7 +10,8 @@ rem buildings it culls with them flicker while the camera moves); ISS_BP07=1 com
 rem passes at once instead of skipping them (a black flash while a new shader builds).
 rem ISS_OCCLUSION_MODE=2 answers occlusion queries "visible" (the default 3 says zero pixels:
 rem what the game hides with them blinks while moving). 3 = the old answer.
-rem Game language: ISS_LANGUAGE (PS4 system language id; 2 = French, 1 = English).
+rem Game language: the launcher setting (automatic: the system language), or ISS_LANGUAGE (PS4
+rem system language id; 2 = French, 1 = English).
 setlocal
 set "PORT=%~dp0port"
 rem Same settings file as launcher_firstlight.bat (folder, language, texture budget...).
@@ -18,7 +19,6 @@ set "ISS_GAME=firstlight"
 if not defined MSYS2_ROOT set "MSYS2_ROOT=C:\msys64"
 set "SAVED=%PORT%\user\firstlight_game_dir.txt"
 if not defined ISS_GC_BUDGET_MB set "ISS_GC_BUDGET_MB=card"
-if not defined ISS_LANGUAGE set "ISS_LANGUAGE=2"
 if not defined ISS_VSYNC set "ISS_VSYNC=0"
 if not defined ISS_STALE_READBACK set "ISS_STALE_READBACK=0"
 if not defined ISS_BP07 set "ISS_BP07=1"

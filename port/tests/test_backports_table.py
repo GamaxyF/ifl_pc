@@ -7,6 +7,10 @@ from pathlib import Path
 
 from paths import ROOT
 sys.path.insert(0, str(ROOT / 'launcher'))
+# These tests check the table against the core's own defaults (backports.h): the Second Son
+# profile, not the First Light one this fork's launcher defaults to (it changes three defaults).
+import os  # noqa: E402
+os.environ['ISS_GAME'] = 'secondson'
 import backports_table as t  # noqa: E402
 import infamous_run  # noqa: E402,F401
 

@@ -345,7 +345,8 @@ class Launcher:
         lang = ttk.LabelFrame(middle, text=self.t('language'), padding=8)
         lang.grid(sticky='ew', pady=(0, 8))
         lang.columnconfigure(1, weight=1)
-        self.combo(lang, 0, 'game_language', list(tlg_run.GAME_LANGUAGES), lambda k: GAME_LANGUAGE_NAMES[k])
+        self.combo(lang, 0, 'game_language', ['auto', *tlg_run.GAME_LANGUAGES],
+                   lambda k: self.t('auto') if k == 'auto' else GAME_LANGUAGE_NAMES[k])
         self.combo(lang, 1, 'ui_language', UI_LANGUAGES,
                    lambda k: self.t('auto') if k == 'auto' else UI_LANGUAGE_NAMES[k], on_change=self.build)
         video = ttk.LabelFrame(middle, text=self.t('video'), padding=8)

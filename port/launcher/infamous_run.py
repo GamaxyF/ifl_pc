@@ -30,9 +30,10 @@ LOG_DIR = OUT_DIR / 'logs'
 PROBE = OUT_DIR / ('tlg-probe.exe' if os.name == 'nt' else 'tlg-probe')
 KEEP_LOGS = 30
 
-# Which game this launcher runs: ISS_GAME=firstlight for inFAMOUS First Light (CUSA00575, same
-# engine), else Second Son. First Light keeps its own settings file and its own defaults.
-FIRST_LIGHT = os.environ.get('ISS_GAME', '').lower() in ('firstlight', 'first_light', 'cusa00575')
+# Which game this launcher runs. This fork (GamaxyF/ifl_pc) is for inFAMOUS First Light
+# (CUSA00575, same engine as Second Son): it is the default, also in the release packages;
+# ISS_GAME=secondson runs Second Son. Each game keeps its own settings file and defaults.
+FIRST_LIGHT = os.environ.get('ISS_GAME', 'firstlight').lower() in ('firstlight', 'first_light', 'cusa00575')
 GAME_NAME = 'inFAMOUS First Light' if FIRST_LIGHT else 'inFAMOUS Second Son'
 GAME_SUBTITLE = 'PC — CUSA00575 v1.04' if FIRST_LIGHT else 'PC — CUSA00223 v1.07'
 if FIRST_LIGHT:
@@ -80,8 +81,36 @@ if FIRST_LIGHT:
         _saved_dir = (USER_DIR / 'firstlight_game_dir.txt').read_text(encoding='utf-8', errors='replace').strip()
     except OSError:
         _saved_dir = ''
-    DEFAULT_SETTINGS.update({'game_dir': _saved_dir, 'game_language': 'fr', 'ui_language': 'auto',
+    DEFAULT_SETTINGS.update({'game_dir': _saved_dir, 'game_language': 'auto', 'ui_language': 'auto',
                              'vsync': False, 'vram_budget_mb': 0})
+
+
+def system_locale():
+    """The system language as a lowercase locale name ('fr_fr', 'french_france', 'pt_br'...)."""
+    for name in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
+        if os.environ.get(name):
+            return os.environ[name].lower()
+    try:
+        import locale
+        return (locale.getlocale()[0] or '').lower()
+    except ValueError:
+        return ''
+
+
+def game_language(settings):
+    """The game language key; 'auto' follows the system language (English when the game has no
+    match: French, Brazilian Portuguese and Latin American Spanish are mapped)."""
+    choice = settings.get('game_language', 'auto')
+    if choice != 'auto':
+        return choice
+    value = system_locale()
+    if value.startswith(('fr', 'french')):
+        return 'fr_CA' if value[3:5] == 'ca' or 'canada' in value else 'fr'
+    if value.startswith(('pt', 'portuguese')):
+        return 'pt_BR'
+    if value.startswith(('es', 'spanish')):
+        return 'es_LA'
+    return 'en'
 
 
 def config_path():
@@ -498,7 +527,7 @@ def build_env(settings, extra=None):
     env['ISS_WRITE_MERGE'] = os.environ.get('ISS_WRITE_MERGE', '1' if settings.get('write_merge', True) else '0')
     env['ISS_DEFERRED_READBACK'] = os.environ.get('ISS_DEFERRED_READBACK', '1' if settings.get('deferred_readback', True) else '0')
     env['ISS_STICK_DEADZONE'] = os.environ.get('ISS_STICK_DEADZONE', f"{int(settings.get('stick_deadzone', 10)) / 100:.2f}")
-    env['ISS_LANGUAGE'] = os.environ.get('ISS_LANGUAGE', str(GAME_LANGUAGES.get(settings['game_language'], 1)))
+    env['ISS_LANGUAGE'] = os.environ.get('ISS_LANGUAGE', str(GAME_LANGUAGES.get(game_language(settings), 1)))
     if settings.get('ui_language', 'auto') != 'auto':
         env['ISS_UI_LANG'] = settings['ui_language']
     env['ISS_CONFIG'] = str(USER_DIR / 'tlg.ini')
