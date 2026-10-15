@@ -8,6 +8,8 @@ rem VSync: ISS_VSYNC=0 presents with Mailbox (no tearing, no drop to 30 FPS past
 rem Flicker: ISS_STALE_READBACK=0 gives the game this frame's GPU results (one frame late, the
 rem buildings it culls with them flicker while the camera moves); ISS_BP07=1 compiles full-screen
 rem passes at once instead of skipping them (a black flash while a new shader builds).
+rem ISS_OCCLUSION_MODE=2 answers occlusion queries "visible" (the default 3 says zero pixels:
+rem what the game hides with them blinks while moving). 3 = the old answer.
 rem Game language: ISS_LANGUAGE (PS4 system language id; 2 = French, 1 = English).
 setlocal
 set "PORT=%~dp0port"
@@ -18,6 +20,7 @@ if not defined ISS_LANGUAGE set "ISS_LANGUAGE=2"
 if not defined ISS_VSYNC set "ISS_VSYNC=0"
 if not defined ISS_STALE_READBACK set "ISS_STALE_READBACK=0"
 if not defined ISS_BP07 set "ISS_BP07=1"
+if not defined ISS_OCCLUSION_MODE set "ISS_OCCLUSION_MODE=2"
 
 if not exist "%PORT%\out\tlg-probe.exe" (
     echo Port not built: run "bash port/build.sh" from an MSYS2 CLANG64 shell first.
